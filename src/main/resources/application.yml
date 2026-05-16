@@ -1,0 +1,55 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: knowflow-agent
+  datasource:
+    url: jdbc:postgresql://localhost:5432/knowledge_agent
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
+  global-config:
+    banner: false
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+ai:
+  chat:
+    base-url: https://api.example.com/v1
+    api-key: ${AI_API_KEY:}
+    model-name: gpt-4o-mini
+    temperature: 0.2
+    timeout-seconds: 60
+  embedding:
+    base-url: https://api.example.com/v1
+    api-key: ${AI_API_KEY:}
+    model-name: text-embedding-3-small
+    dimension: 1536
+    timeout-seconds: 60
+
+rag:
+  chunk-size: 800
+  chunk-overlap: 120
+  top-k: 5
+  min-score: 0.65
+  max-context-chunks: 6
+  max-history-messages: 8
+
+storage:
+  local:
+    base-path: ./data/uploads
+
+vector:
+  type: memory
