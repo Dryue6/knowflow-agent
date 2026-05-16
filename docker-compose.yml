@@ -1,0 +1,64 @@
+name: knowflow-agent
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: knowflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: knowledge_agent
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./src/main/resources/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d knowledge_agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:4
+    container_name: knowflow-adminer
+    restart: unless-stopped
+    profiles:
+      - tools
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+
+#  app:
+#    image: maven:3.9.9-eclipse-temurin-17
+#    container_name: knowflow-app
+#    restart: unless-stopped
+#    profiles:
+#      - app
+#    working_dir: /workspace
+#    command: mvn spring-boot:run
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#    environment:
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/knowledge_agent
+#      SPRING_DATASOURCE_USERNAME: postgres
+#      SPRING_DATASOURCE_PASSWORD: postgres
+#      VECTOR_TYPE: pgvector
+#      AI_API_KEY: ${AI_API_KEY:-}
+#      TZ: Asia/Shanghai
+#    ports:
+#      - "8080:8080"
+#    volumes:
+#      - ./:/workspace
+#      - maven-repo:/root/.m2
+#      - uploads-data:/workspace/data/uploads
+
+volumes:
+  postgres-data:
+  maven-repo:
+  uploads-data:
