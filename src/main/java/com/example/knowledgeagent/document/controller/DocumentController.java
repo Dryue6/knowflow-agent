@@ -3,19 +3,30 @@ package com.example.knowledgeagent.document.controller;
 import com.example.knowledgeagent.common.api.ApiResult;
 import com.example.knowledgeagent.common.api.PageResult;
 import com.example.knowledgeagent.document.dto.DocumentUploadResponse;
+import com.example.knowledgeagent.document.dto.UpdateDocumentConstraintRequest;
 import com.example.knowledgeagent.document.service.DocumentService;
 import com.example.knowledgeagent.document.vo.DocumentChunkVO;
+import com.example.knowledgeagent.document.vo.DocumentFileResource;
+import com.example.knowledgeagent.document.vo.DocumentPreviewTextVO;
 import com.example.knowledgeagent.document.vo.DocumentVO;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.nio.charset.StandardCharsets;
 
 @Validated
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
+/**
+ * 定义 DocumentController 组件，承载对应模块的业务职责。
+ */
 public class DocumentController {
     private final DocumentService documentService;
 
@@ -71,5 +82,49 @@ public class DocumentController {
                                                          @RequestParam(defaultValue = "1") @Min(1) long page,
                                                          @RequestParam(defaultValue = "10") @Min(1) long size) {
         return ApiResult.ok(documentService.listDocumentChunks(documentId, page, size));
+    }
+
+    @GetMapping("/documents/{documentId}/file")
+    /**
+     * 处理 file 方法对应的业务逻辑。
+     */
+    public ResponseEntity<?> file(@PathVariable Long documentId) {
+        return fileResponse(documentService.getDocumentFile(documentId), true);
+    }
+
+    @GetMapping("/documents/{documentId}/download")
+    /**
+     * 处理 download 方法对应的业务逻辑。
+     */
+    public ResponseEntity<?> download(@PathVariable Long documentId) {
+        return fileResponse(documentService.getDocumentFile(documentId), false);
+    }
+
+    @GetMapping("/documents/{documentId}/preview-text")
+    /**
+     * 处理 previewText 方法对应的业务逻辑。
+     */
+    public ApiResult<DocumentPreviewTextVO> previewText(@PathVariable Long documentId) {
+        return ApiResult.ok(documentService.previewText(documentId));
+    }
+
+    @PatchMapping("/documents/{documentId}/constraint")
+    public ApiResult<DocumentVO> updateConstraint(@PathVariable Long documentId,
+                                                  @Validated @RequestBody UpdateDocumentConstraintRequest request) {
+        return ApiResult.ok(documentService.updateConstraint(documentId, request));
+    }
+
+    /**
+     * 处理 fileResponse 方法对应的业务逻辑。
+     */
+    private ResponseEntity<?> fileResponse(DocumentFileResource file, boolean inline) {
+        ContentDisposition disposition = (inline ? ContentDisposition.inline() : ContentDisposition.attachment())
+                .filename(file.fileName(), StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .contentType(file.mediaType())
+                .contentLength(file.contentLength())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(file.resource());
     }
 }

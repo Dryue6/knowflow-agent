@@ -18,13 +18,13 @@ import com.example.knowledgeagent.common.api.PageResult;
 import com.example.knowledgeagent.common.exception.BusinessException;
 import com.example.knowledgeagent.config.RagProperties;
 import com.example.knowledgeagent.rag.dto.RagAskRequest;
+import com.example.knowledgeagent.rag.service.RagCitationService;
 import com.example.knowledgeagent.rag.service.RagService;
 import com.example.knowledgeagent.rag.vo.CitationVO;
 import com.example.knowledgeagent.rag.vo.RagAnswerVO;
 import com.example.knowledgeagent.rag.vo.RagStreamResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -32,15 +32,20 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 ChatServiceImpl 组件，承载对应模块的业务职责。
+ */
 public class ChatServiceImpl implements ChatService {
     private final ChatSessionMapper chatSessionMapper;
     private final ChatMessageMapper chatMessageMapper;
     private final ChatMemoryService chatMemoryService;
     private final RagService ragService;
+    private final RagCitationService citationService;
     private final RagProperties ragProperties;
     private final ObjectMapper objectMapper;
 
@@ -99,7 +104,7 @@ public class ChatServiceImpl implements ChatService {
         Page<ChatMessage> result = chatMessageMapper.selectPage(Page.of(page, size), new LambdaQueryWrapper<ChatMessage>()
                 .eq(ChatMessage::getSessionId, sessionId)
                 .orderByAsc(ChatMessage::getCreatedAt));
-        return PageResult.of(result.getRecords().stream().map(ChatMessageVO::from).toList(), result.getTotal(), page, size);
+        return PageResult.of(result.getRecords().stream().map(this::toMessageVO).toList(), result.getTotal(), page, size);
     }
 
     /**
@@ -117,6 +122,7 @@ public class ChatServiceImpl implements ChatService {
                 chatMemoryService.recentHistory(sessionId, ragProperties.maxHistoryMessages()));
         ChatMessage assistantMessage = saveMessage(sessionId, ChatRole.ASSISTANT, answer.answer(), toJson(answer.citations()));
         touchSession(session);
+        System.out.println("当前为非流式回答");
         return new ChatReplyVO(userMessage.getId(), assistantMessage.getId(), answer.answer(), answer.citations());
     }
 
@@ -135,7 +141,7 @@ public class ChatServiceImpl implements ChatService {
             StringBuilder answer = new StringBuilder();
             try {
                 // 先把用户消息 ID 推给前端，前端可立即把本轮问题和后端记录关联起来。
-                emitter.send(SseEmitter.event().name("userMessageId").data(userMessage.getId(), MediaType.APPLICATION_JSON));
+                send(emitter, "userMessageId", userMessage.getId());
                 RagStreamResult streamResult = ragService.askStream(new RagAskRequest(session.getKnowledgeBaseId(), request.content(), sessionId),
                         chatMemoryService.recentHistory(sessionId, ragProperties.maxHistoryMessages()), token -> {
                             answer.append(token);
@@ -149,9 +155,11 @@ public class ChatServiceImpl implements ChatService {
                 send(emitter, "citations", streamResult.citations());
                 emitter.complete();
             } catch (Exception ex) {
-                emitter.completeWithError(ex);
+                sendError(emitter, ex);
+                emitter.complete();
             }
         });
+        System.out.println("当前为流式返回");
         return emitter;
     }
 
@@ -181,6 +189,32 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
+     * 将消息实体转换为前端 VO，并在返回前尽量补齐引用定位信息。
+     */
+    private ChatMessageVO toMessageVO(ChatMessage entity) {
+        return new ChatMessageVO(entity.getId(), entity.getSessionId(), entity.getRole(), entity.getContent(), normalizeCitationsJson(entity.getCitationsJson()), entity.getCreatedAt());
+    }
+
+    /**
+     * 规范化历史引用 JSON。
+     * <p>
+     * 旧消息可能只保存了基础 citation 字段，读取历史时尝试调用引用服务补齐页码、章节和段落；
+     * 如果 JSON 格式异常则保留原值，避免单条历史消息影响整个会话加载。
+     */
+    private String normalizeCitationsJson(String citationsJson) {
+        if (citationsJson == null || citationsJson.isBlank()) {
+            return citationsJson;
+        }
+        try {
+            List<CitationVO> citations = objectMapper.readValue(citationsJson,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, CitationVO.class));
+            return objectMapper.writeValueAsString(citationService.enrich(citations));
+        } catch (Exception ignored) {
+            return citationsJson;
+        }
+    }
+
+    /**
      * 更新会话更新时间，用于会话列表按最近活跃排序。
      */
     private void touchSession(ChatSession session) {
@@ -204,9 +238,22 @@ public class ChatServiceImpl implements ChatService {
      */
     private void send(SseEmitter emitter, String name, Object data) {
         try {
-            emitter.send(SseEmitter.event().name(name).data(data, MediaType.APPLICATION_JSON));
+            Object payload = data instanceof String ? data : objectMapper.writeValueAsString(data);
+            emitter.send(SseEmitter.event().name(name).data(payload));
         } catch (IOException ex) {
             throw new IllegalStateException(ex);
         }
+    }
+
+    /**
+     * 将流式处理异常转换为 SSE error 事件，业务异常保留原错误码。
+     */
+    private void sendError(SseEmitter emitter, Exception ex) {
+        String code = "500";
+        String message = ex.getMessage() == null ? "系统异常，请稍后重试" : ex.getMessage();
+        if (ex instanceof BusinessException businessException) {
+            code = businessException.getErrorCode().getCode();
+        }
+        send(emitter, "error", Map.of("code", code, "message", message));
     }
 }

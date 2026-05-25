@@ -4,6 +4,9 @@ import com.example.knowledgeagent.document.entity.DocumentChunk;
 
 import java.time.LocalDateTime;
 
+/**
+ * 定义 DocumentChunkVO 数据结构，用于在层间传递结构化数据。
+ */
 public record DocumentChunkVO(
         Long id,
         Long documentId,

@@ -3,6 +3,9 @@ package com.example.knowledgeagent.common.api;
 import lombok.Getter;
 
 @Getter
+/**
+ * 定义 ErrorCode 枚举，集中描述业务状态或类型取值。
+ */
 public enum ErrorCode {
     SUCCESS("0", "success"),
     BAD_REQUEST("400", "请求参数错误"),

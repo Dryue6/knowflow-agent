@@ -10,6 +10,9 @@ import java.time.LocalDateTime;
 
 @Data
 @TableName("knowledge_base")
+/**
+ * 定义 KnowledgeBase 组件，承载对应模块的业务职责。
+ */
 public class KnowledgeBase {
     @TableId(type = IdType.AUTO)
     private Long id;

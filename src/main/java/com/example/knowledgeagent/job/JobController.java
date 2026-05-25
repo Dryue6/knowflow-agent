@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
+/**
+ * 定义 JobController 组件，承载对应模块的业务职责。
+ */
 public class JobController {
     private final DocumentIndexJobService documentIndexJobService;
 

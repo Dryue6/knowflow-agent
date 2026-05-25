@@ -2,6 +2,9 @@ package com.example.knowledgeagent.common.api;
 
 import java.time.LocalDateTime;
 
+/**
+ * 定义 ApiResult 数据结构，用于在层间传递结构化数据。
+ */
 public record ApiResult<T>(String code, String message, T data, LocalDateTime timestamp) {
 
     /**

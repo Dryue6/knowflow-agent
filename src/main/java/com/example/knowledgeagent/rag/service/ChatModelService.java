@@ -2,6 +2,9 @@ package com.example.knowledgeagent.rag.service;
 
 import java.util.function.Consumer;
 
+/**
+ * 定义 ChatModelService 接口，约定该模块对外提供的能力。
+ */
 public interface ChatModelService {
     /**
      * 根据 Prompt 生成完整文本回答。

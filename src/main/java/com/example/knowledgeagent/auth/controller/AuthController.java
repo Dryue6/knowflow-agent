@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/auth")
+/**
+ * 定义 AuthController 组件，承载对应模块的业务职责。
+ */
 public class AuthController {
     private final AuthService authService;
 

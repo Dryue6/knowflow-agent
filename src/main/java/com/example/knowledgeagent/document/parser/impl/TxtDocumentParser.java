@@ -2,6 +2,7 @@ package com.example.knowledgeagent.document.parser.impl;
 
 import com.example.knowledgeagent.common.api.ErrorCode;
 import com.example.knowledgeagent.common.exception.BusinessException;
+import com.example.knowledgeagent.common.util.TextSanitizer;
 import com.example.knowledgeagent.document.enums.FileType;
 import com.example.knowledgeagent.document.parser.DocumentParser;
 import com.example.knowledgeagent.document.parser.ParsedDocument;
@@ -14,6 +15,9 @@ import java.nio.file.Path;
 import java.util.Map;
 
 @Component
+/**
+ * 定义 TxtDocumentParser 组件，承载对应模块的业务职责。
+ */
 public class TxtDocumentParser implements DocumentParser {
     /**
      * 声明该解析器支持 TXT 文件。
@@ -29,7 +33,7 @@ public class TxtDocumentParser implements DocumentParser {
     @Override
     public ParsedDocument parse(Path path) {
         try {
-            return new ParsedDocument(path.getFileName().toString(), Files.readString(path, StandardCharsets.UTF_8), Map.of());
+            return new ParsedDocument(path.getFileName().toString(), TextSanitizer.removeNullBytes(Files.readString(path, StandardCharsets.UTF_8)), Map.of());
         } catch (IOException ex) {
             throw new BusinessException(ErrorCode.FILE_ERROR, "读取 txt 文件失败: " + ex.getMessage());
         }

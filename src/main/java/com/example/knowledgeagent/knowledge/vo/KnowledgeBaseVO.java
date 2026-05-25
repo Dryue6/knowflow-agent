@@ -5,6 +5,9 @@ import com.example.knowledgeagent.knowledge.enums.KnowledgeBaseStatus;
 
 import java.time.LocalDateTime;
 
+/**
+ * 定义 KnowledgeBaseVO 数据结构，用于在层间传递结构化数据。
+ */
 public record KnowledgeBaseVO(
         Long id,
         String name,

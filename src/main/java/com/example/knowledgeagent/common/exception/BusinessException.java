@@ -4,6 +4,9 @@ import com.example.knowledgeagent.common.api.ErrorCode;
 import lombok.Getter;
 
 @Getter
+/**
+ * 定义 BusinessException 组件，承载对应模块的业务职责。
+ */
 public class BusinessException extends RuntimeException {
     private final ErrorCode errorCode;
 

@@ -9,6 +9,11 @@ spring:
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
   servlet:
     multipart:
       max-file-size: 50MB
@@ -27,15 +32,15 @@ springdoc:
 
 ai:
   chat:
-    base-url: https://api.example.com/v1
-    api-key: ${AI_API_KEY:}
-    model-name: gpt-4o-mini
+    base-url: https://api.deepseek.com
+    api-key: sk-bd6718e583784f33bf95576171b35a18
+    model-name: deepseek-v4-flash
     temperature: 0.2
     timeout-seconds: 60
   embedding:
-    base-url: https://api.example.com/v1
-    api-key: ${AI_API_KEY:}
-    model-name: text-embedding-3-small
+    base-url: https://api.deepseek.com
+    api-key:
+    model-name: deepseek-v4-flash
     dimension: 1536
     timeout-seconds: 60
 
@@ -43,13 +48,47 @@ rag:
   chunk-size: 800
   chunk-overlap: 120
   top-k: 5
-  min-score: 0.65
+  min-score: 0.8
   max-context-chunks: 6
   max-history-messages: 8
+  system-constraint-max-chunks: 12
+  pinned-max-chunks: 8
+  candidate-top-k: 30
+  keyword-min-score: 0.2
+  final-min-score: 0.6
+  query-rewrite:
+    enabled: true
+    provider: ollama
+    base-url: http://localhost:11434
+    model-name: qwen2.5:7b
+    temperature: 0.0
+    timeout-seconds: 90
+    max-query-variants: 5
+    max-terms-per-field: 8
+    num-predict: 96
+    num-ctx: 2048
+    max-retries: 0
+    cache-enabled: true
+    cache-ttl-minutes: 60
+    cache-max-size: 512
+    cache-key-prefix: "knowflow:rag:query-rewrite:"
+    fast-path-enabled: true
+    fast-path-max-length: 12
+    complex-intent-keywords: 怎么,如何,为什么,规则,计算,占比,分配,要求,流程
+    warmup-enabled: true
+    warmup-query: 成绩怎么计算
+    fallback-mode: conservative
+  rerank:
+    enabled: true
+    mode: local
+    provider:
+    base-url:
+    api-key:
+    model-name:
 
 storage:
   local:
     base-path: ./data/uploads
 
 vector:
-  type: memory
+  type: pgvector

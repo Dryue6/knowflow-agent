@@ -26,6 +26,9 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 KnowledgeBaseServiceImpl 组件，承载对应模块的业务职责。
+ */
 public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final DocumentMapper documentMapper;

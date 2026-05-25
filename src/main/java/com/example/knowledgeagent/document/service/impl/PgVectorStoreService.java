@@ -16,6 +16,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "vector", name = "type", havingValue = "pgvector")
+/**
+ * 定义 PgVectorStoreService 组件，承载对应模块的业务职责。
+ */
 public class PgVectorStoreService implements VectorStoreService {
     private final JdbcTemplate jdbcTemplate;
 

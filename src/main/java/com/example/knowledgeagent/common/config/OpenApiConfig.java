@@ -6,6 +6,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+/**
+ * 定义 OpenApiConfig 组件，承载对应模块的业务职责。
+ */
 public class OpenApiConfig {
 
     /**

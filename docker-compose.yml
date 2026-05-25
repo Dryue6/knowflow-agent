@@ -1,5 +1,42 @@
 name: knowflow-agent
 
+x-service-env: &service-env
+  NACOS_SERVER_ADDR: nacos:8848
+  SENTINEL_DASHBOARD: sentinel-dashboard:8858
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  AI_CHAT_BASE_URL: ${AI_CHAT_BASE_URL:-https://api.deepseek.com}
+  AI_CHAT_API_KEY: ${AI_CHAT_API_KEY:-sk-bd6718e583784f33bf95576171b35a18}
+  AI_CHAT_MODEL_NAME: ${AI_CHAT_MODEL_NAME:-deepseek-v4-flash}
+  AI_CHAT_TEMPERATURE: ${AI_CHAT_TEMPERATURE:-0.2}
+  AI_CHAT_TIMEOUT_SECONDS: ${AI_CHAT_TIMEOUT_SECONDS:-60}
+  AI_EMBEDDING_BASE_URL: ${AI_EMBEDDING_BASE_URL:-http://ollama:11434}
+  AI_EMBEDDING_API_KEY: ${AI_EMBEDDING_API_KEY:-}
+  AI_EMBEDDING_MODEL_NAME: ${AI_EMBEDDING_MODEL_NAME:-qwen2.5:7b}
+  AI_EMBEDDING_DIMENSION: ${AI_EMBEDDING_DIMENSION:-1536}
+  AI_EMBEDDING_TIMEOUT_SECONDS: ${AI_EMBEDDING_TIMEOUT_SECONDS:-60}
+  STORAGE_LOCAL_BASE_PATH: ${STORAGE_LOCAL_BASE_PATH:-/app/data/uploads}
+  VECTOR_STORE_TYPE: ${VECTOR_STORE_TYPE:-pgvector}
+  TZ: Asia/Shanghai
+
+x-service-depends: &service-depends
+  nacos:
+    condition: service_healthy
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  seata-server:
+    condition: service_healthy
+
+x-service-build-args: &service-build-args
+  MAVEN_IMAGE: ${MAVEN_IMAGE:-maven:3.9-eclipse-temurin-17}
+  RUNTIME_IMAGE: ${RUNTIME_IMAGE:-eclipse-temurin:17-jre}
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -14,7 +51,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./src/main/resources/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./infra/db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d knowledge_agent"]
       interval: 10s
@@ -33,32 +70,225 @@ services:
     ports:
       - "8081:8080"
 
-#  app:
-#    image: maven:3.9.9-eclipse-temurin-17
-#    container_name: knowflow-app
-#    restart: unless-stopped
-#    profiles:
-#      - app
-#    working_dir: /workspace
-#    command: mvn spring-boot:run
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#    environment:
-#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/knowledge_agent
-#      SPRING_DATASOURCE_USERNAME: postgres
-#      SPRING_DATASOURCE_PASSWORD: postgres
-#      VECTOR_TYPE: pgvector
-#      AI_API_KEY: ${AI_API_KEY:-}
-#      TZ: Asia/Shanghai
-#    ports:
-#      - "8080:8080"
-#    volumes:
-#      - ./:/workspace
-#      - maven-repo:/root/.m2
-#      - uploads-data:/workspace/data/uploads
+  redis:
+    image: redis:7-alpine
+    container_name: knowflow-redis
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: knowflow-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      TZ: Asia/Shanghai
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/v1/console/health/readiness | grep -q OK"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  sentinel-dashboard:
+    image: bladex/sentinel-dashboard:1.8.8
+    container_name: knowflow-sentinel
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "8858:8858"
+
+  seata-server:
+    image: seataio/seata-server:2.0.0
+    container_name: knowflow-seata
+    restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_healthy
+    environment:
+      SEATA_IP: seata-server
+      SEATA_PORT: 8091
+      TZ: Asia/Shanghai
+    ports:
+      - "8091:8091"
+      - "7091:7091"
+    volumes:
+      - ./infra/seata/application.yml:/seata-server/resources/application.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:7091 >/dev/null && timeout 2 bash -c '</dev/tcp/localhost/8091'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: knowflow-ollama
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_MODELS: /models
+      TZ: Asia/Shanghai
+    ports:
+      - "11434:11434"
+    volumes:
+      - D:/llm:/models
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: knowflow-ollama-pull
+    profiles:
+      - tools
+    depends_on:
+      ollama:
+        condition: service_started
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_MODELS: /models
+      OLLAMA_HOST: http://ollama:11434
+      TZ: Asia/Shanghai
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen2.5:7b"]
+
+  knowflow-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        <<: *service-build-args
+        MODULE: knowflow-gateway
+    container_name: knowflow-gateway
+    restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_healthy
+    environment:
+      <<: *service-env
+    ports:
+      - "8080:8080"
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        <<: *service-build-args
+        MODULE: auth-service
+    container_name: knowflow-auth
+    restart: unless-stopped
+    depends_on: *service-depends
+    environment:
+      <<: *service-env
+    ports:
+      - "18081:18081"
+
+  knowledge-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        <<: *service-build-args
+        MODULE: knowledge-service
+    container_name: knowflow-knowledge
+    restart: unless-stopped
+    depends_on: *service-depends
+    environment:
+      <<: *service-env
+    ports:
+      - "18082:18082"
+
+  document-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        <<: *service-build-args
+        MODULE: document-service
+    container_name: knowflow-document
+    restart: unless-stopped
+    depends_on: *service-depends
+    environment:
+      <<: *service-env
+      RAG_QUERY_REWRITE_BASE_URL: http://ollama:11434
+    ports:
+      - "18083:18083"
+    volumes:
+      - ./data/uploads:/app/data/uploads
+
+  rag-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        <<: *service-build-args
+        MODULE: rag-service
+    container_name: knowflow-rag
+    restart: unless-stopped
+    depends_on:
+      <<: *service-depends
+      ollama:
+        condition: service_started
+    environment:
+      <<: *service-env
+      RAG_QUERY_REWRITE_BASE_URL: http://ollama:11434
+      RAG_FEIGN_READ_TIMEOUT: ${RAG_FEIGN_READ_TIMEOUT:-60000}
+    ports:
+      - "18084:18084"
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        <<: *service-build-args
+        MODULE: chat-service
+    container_name: knowflow-chat
+    restart: unless-stopped
+    depends_on: *service-depends
+    environment:
+      <<: *service-env
+      FEIGN_READ_TIMEOUT: ${CHAT_FEIGN_READ_TIMEOUT:-120000}
+      RAG_STREAM_BASE_URL: http://rag-service:18084
+    ports:
+      - "18085:18085"
+
+  agent-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        <<: *service-build-args
+        MODULE: agent-service
+    container_name: knowflow-agent-service
+    restart: unless-stopped
+    depends_on: *service-depends
+    environment:
+      <<: *service-env
+    ports:
+      - "18086:18086"
 
 volumes:
   postgres-data:
-  maven-repo:
-  uploads-data:
+  redis-data:
+  nacos-data:

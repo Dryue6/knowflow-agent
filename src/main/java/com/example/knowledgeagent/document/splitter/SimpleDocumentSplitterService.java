@@ -1,6 +1,7 @@
 package com.example.knowledgeagent.document.splitter;
 
 import com.example.knowledgeagent.common.exception.BusinessException;
+import com.example.knowledgeagent.common.util.TextSanitizer;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -8,6 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
+/**
+ * 定义 SimpleDocumentSplitterService 组件，承载对应模块的业务职责。
+ */
 public class SimpleDocumentSplitterService implements DocumentSplitterService {
     /**
      * 按 chunkSize 和 overlap 切分文本。
@@ -20,7 +24,7 @@ public class SimpleDocumentSplitterService implements DocumentSplitterService {
         if (chunkSize <= 0 || overlap < 0 || overlap >= chunkSize) {
             throw BusinessException.badRequest("切片参数不合法");
         }
-        String normalized = text == null ? "" : text.replace("\r\n", "\n").trim();
+        String normalized = text == null ? "" : TextSanitizer.removeNullBytes(text).replace("\r\n", "\n").trim();
         if (!StringUtils.hasText(normalized)) {
             return List.of();
         }
@@ -38,7 +42,7 @@ public class SimpleDocumentSplitterService implements DocumentSplitterService {
             }
             String content = normalized.substring(start, end).trim();
             if (StringUtils.hasText(content)) {
-                chunks.add(new TextChunk(index++, content, estimateTokens(content)));
+                chunks.add(new TextChunk(index++, content, estimateTokens(content), start, end));
             }
             if (end >= normalized.length()) {
                 break;

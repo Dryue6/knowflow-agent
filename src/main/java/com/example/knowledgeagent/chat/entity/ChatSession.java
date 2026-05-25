@@ -9,6 +9,9 @@ import java.time.LocalDateTime;
 
 @Data
 @TableName("chat_session")
+/**
+ * 定义 ChatSession 组件，承载对应模块的业务职责。
+ */
 public class ChatSession {
     @TableId(type = IdType.AUTO)
     private Long id;

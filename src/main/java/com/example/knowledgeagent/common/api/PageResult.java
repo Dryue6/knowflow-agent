@@ -2,6 +2,9 @@ package com.example.knowledgeagent.common.api;
 
 import java.util.List;
 
+/**
+ * 定义 PageResult 数据结构，用于在层间传递结构化数据。
+ */
 public record PageResult<T>(List<T> records, long total, long page, long size) {
 
     /**

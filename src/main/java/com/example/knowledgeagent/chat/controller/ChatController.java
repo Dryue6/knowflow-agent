@@ -20,6 +20,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/chat/sessions")
+/**
+ * 定义 ChatController 组件，承载对应模块的业务职责。
+ */
 public class ChatController {
     private final ChatService chatService;
 

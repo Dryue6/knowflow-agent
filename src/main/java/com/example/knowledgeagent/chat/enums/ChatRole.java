@@ -5,6 +5,9 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
 @Getter
+/**
+ * 定义 ChatRole 枚举，集中描述业务状态或类型取值。
+ */
 public enum ChatRole {
     USER("USER"), ASSISTANT("ASSISTANT"), SYSTEM("SYSTEM");
 

@@ -14,6 +14,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @ConditionalOnProperty(prefix = "vector", name = "type", havingValue = "memory", matchIfMissing = true)
+/**
+ * 定义 InMemoryVectorStoreService 组件，承载对应模块的业务职责。
+ */
 public class InMemoryVectorStoreService implements VectorStoreService {
     private final Map<String, StoredVector> vectors = new ConcurrentHashMap<>();
 
@@ -88,6 +91,9 @@ public class InMemoryVectorStoreService implements VectorStoreService {
         return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
     }
 
+    /**
+     * 创建或保存 StoredVector 对应的业务数据。
+     */
     private record StoredVector(String vectorId, VectorChunkInput input) {
     }
 }

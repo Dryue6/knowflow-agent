@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/agent")
+/**
+ * 定义 AgentController 组件，承载对应模块的业务职责。
+ */
 public class AgentController {
     private final AgentService agentService;
 

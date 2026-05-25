@@ -9,6 +9,7 @@ import com.example.knowledgeagent.document.embedding.EmbeddingService;
 import com.example.knowledgeagent.document.entity.Document;
 import com.example.knowledgeagent.document.entity.DocumentChunk;
 import com.example.knowledgeagent.document.enums.DocumentStatus;
+import com.example.knowledgeagent.document.enums.FileType;
 import com.example.knowledgeagent.document.mapper.DocumentChunkMapper;
 import com.example.knowledgeagent.document.mapper.DocumentMapper;
 import com.example.knowledgeagent.document.parser.DocumentParserService;
@@ -26,11 +27,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 DocumentIndexServiceImpl 组件，承载对应模块的业务职责。
+ */
 public class DocumentIndexServiceImpl implements DocumentIndexService {
     private final DocumentMapper documentMapper;
     private final DocumentChunkMapper documentChunkMapper;
@@ -77,7 +82,12 @@ public class DocumentIndexServiceImpl implements DocumentIndexService {
                 entity.setContent(chunk.content());
                 entity.setContentHash(HashUtils.sha256(chunk.content()));
                 entity.setTokenCount(chunk.tokenCount());
-                entity.setMetadataJson(toJson(Map.of("title", parsed.title(), "source", document.getOriginalFileName())));
+                Map<String, Object> metadata = chunkMetadata(document, parsed, chunk);
+                entity.setPageNumber(asInteger(metadata.get("pageNumber")));
+                entity.setSectionTitle(asString(metadata.get("sectionTitle")));
+                entity.setParagraphIndex(asInteger(metadata.get("paragraphIndex")));
+                entity.setLocationText(asString(metadata.get("locationText")));
+                entity.setMetadataJson(toJson(metadata));
                 LocalDateTime now = LocalDateTime.now();
                 entity.setCreatedAt(now);
                 entity.setUpdatedAt(now);
@@ -157,11 +167,150 @@ public class DocumentIndexServiceImpl implements DocumentIndexService {
      * <p>
      * 元数据不是索引主流程的关键路径，序列化异常时降级为空对象，避免因为非核心字段阻断索引。
      */
+    private Map<String, Object> chunkMetadata(Document document, ParsedDocument parsed, TextChunk chunk) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("title", parsed.title());
+        metadata.put("source", document.getOriginalFileName());
+        metadata.putAll(locationMetadata(document.getFileType(), parsed, chunk));
+        return metadata;
+    }
+
+    /**
+     * 根据文件类型构造切片定位元数据，PDF 使用页码，文本型文档使用段落和章节。
+     */
+    private Map<String, Object> locationMetadata(FileType fileType, ParsedDocument parsed, TextChunk chunk) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        if (fileType == FileType.PDF) {
+            Integer pageNumber = pageNumber(parsed.metadata().get("pageRanges"), chunk.startOffset());
+            if (pageNumber != null) {
+                metadata.put("pageNumber", pageNumber);
+                metadata.put("locationText", "第 " + pageNumber + " 页");
+            }
+            return metadata;
+        }
+
+        ParagraphLocation paragraph = paragraphLocation(parsed.text(), chunk.startOffset());
+        if (paragraph != null) {
+            metadata.put("paragraphIndex", paragraph.index());
+            if (paragraph.sectionTitle() != null && !paragraph.sectionTitle().isBlank()) {
+                metadata.put("sectionTitle", paragraph.sectionTitle());
+                metadata.put("locationText", paragraph.sectionTitle() + " / 第 " + paragraph.index() + " 段");
+            } else {
+                metadata.put("locationText", "第 " + paragraph.index() + " 段");
+            }
+        }
+        return metadata;
+    }
+
+    /**
+     * 查询 pageNumber 对应的数据或业务结果。
+     */
+    private Integer pageNumber(Object pageRanges, int offset) {
+        if (!(pageRanges instanceof List<?> ranges) || offset < 0) {
+            return null;
+        }
+        for (Object item : ranges) {
+            if (!(item instanceof Map<?, ?> range)) {
+                continue;
+            }
+            Integer page = asInteger(range.get("pageNumber"));
+            Integer start = asInteger(range.get("startOffset"));
+            Integer end = asInteger(range.get("endOffset"));
+            if (page != null && start != null && end != null && offset >= start && offset <= end) {
+                return page;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 根据切片起始偏移推断段落位置，并记录最近出现的章节标题。
+     */
+    private ParagraphLocation paragraphLocation(String text, int offset) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String[] lines = text.replace("\r\n", "\n").split("\n", -1);
+        int cursor = 0;
+        int paragraphIndex = 0;
+        String sectionTitle = null;
+        for (String line : lines) {
+            int start = cursor;
+            int end = cursor + line.length();
+            cursor = end + 1;
+            String trimmed = line.trim();
+            if (trimmed.isBlank()) {
+                continue;
+            }
+            paragraphIndex++;
+            if (isSectionTitle(trimmed)) {
+                sectionTitle = cleanSectionTitle(trimmed);
+            }
+            if (offset >= start && offset <= end) {
+                return new ParagraphLocation(paragraphIndex, sectionTitle);
+            }
+        }
+        return new ParagraphLocation(Math.max(1, paragraphIndex), sectionTitle);
+    }
+
+    /**
+     * 校验 isSectionTitle 对应的业务条件。
+     */
+    private boolean isSectionTitle(String text) {
+        if (text.length() > 80) {
+            return false;
+        }
+        return text.startsWith("#")
+                || text.matches("^第.{1,12}[章节篇部分].*")
+                || text.matches("^[一二三四五六七八九十]+[、.．].*")
+                || text.matches("^\\d+(\\.\\d+)*[、.．\\s].*");
+    }
+
+    /**
+     * 处理 cleanSectionTitle 对应的兜底、清洗或默认值逻辑。
+     */
+    private String cleanSectionTitle(String text) {
+        return text.replaceFirst("^#+\\s*", "").trim();
+    }
+
+    /**
+     * 将解析元数据中的数字或数字字符串安全转为 Integer。
+     */
+    private Integer asInteger(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return Integer.parseInt(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 将解析元数据值安全转为字符串。
+     */
+    private String asString(Object value) {
+        return value == null ? null : value.toString();
+    }
+
+    /**
+     * 转换或构建 toJson 所需的数据结构。
+     */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
             return "{}";
         }
+    }
+
+    /**
+     * 保存切片所属段落序号和章节标题。
+     */
+    private record ParagraphLocation(int index, String sectionTitle) {
     }
 }

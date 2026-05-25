@@ -9,6 +9,9 @@ import java.time.LocalDateTime;
 
 @Data
 @TableName("user_account")
+/**
+ * 定义 UserAccount 组件，承载对应模块的业务职责。
+ */
 public class UserAccount {
     @TableId(type = IdType.AUTO)
     private Long id;

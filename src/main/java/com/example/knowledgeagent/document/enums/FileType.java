@@ -8,6 +8,9 @@ import lombok.Getter;
 import java.util.Arrays;
 
 @Getter
+/**
+ * 定义 FileType 枚举，集中描述业务状态或类型取值。
+ */
 public enum FileType {
     TXT("TXT", ".txt"), MD("MD", ".md"), PDF("PDF", ".pdf"), DOCX("DOCX", ".docx");
 

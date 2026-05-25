@@ -20,6 +20,9 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 AuthServiceImpl 组件，承载对应模块的业务职责。
+ */
 public class AuthServiceImpl implements AuthService {
     private final UserAccountMapper userAccountMapper;
 

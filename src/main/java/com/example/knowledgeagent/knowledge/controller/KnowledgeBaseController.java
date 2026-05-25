@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/knowledge-bases")
+/**
+ * 定义 KnowledgeBaseController 组件，承载对应模块的业务职责。
+ */
 public class KnowledgeBaseController {
     private final KnowledgeBaseService knowledgeBaseService;
 

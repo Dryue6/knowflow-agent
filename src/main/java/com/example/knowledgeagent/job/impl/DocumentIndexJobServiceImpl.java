@@ -20,6 +20,9 @@ import java.time.LocalDateTime;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 DocumentIndexJobServiceImpl 组件，承载对应模块的业务职责。
+ */
 public class DocumentIndexJobServiceImpl implements DocumentIndexJobService {
     private final IndexJobMapper indexJobMapper;
     private final DocumentIndexService documentIndexService;

@@ -22,6 +22,9 @@ import java.util.function.Consumer;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 OpenAiChatModelService 组件，承载对应模块的业务职责。
+ */
 public class OpenAiChatModelService implements ChatModelService {
     private final AiModelProperties properties;
     private final ObjectMapper objectMapper;

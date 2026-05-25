@@ -14,6 +14,9 @@ import java.util.function.Consumer;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 EnterpriseKnowledgeAgentService 组件，承载对应模块的业务职责。
+ */
 public class EnterpriseKnowledgeAgentService implements AgentService {
     private final RagService ragService;
 

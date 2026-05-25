@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS document (
     status VARCHAR(32) NOT NULL,
     error_message TEXT,
     chunk_count INTEGER NOT NULL DEFAULT 0,
+    constraint_level VARCHAR(32) NOT NULL DEFAULT 'NORMAL',
+    constraint_priority INTEGER NOT NULL DEFAULT 100,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -39,6 +41,10 @@ CREATE TABLE IF NOT EXISTS document_chunk (
     content_hash VARCHAR(64) NOT NULL,
     token_count INTEGER NOT NULL DEFAULT 0,
     vector_id VARCHAR(64),
+    page_number INTEGER,
+    section_title VARCHAR(255),
+    paragraph_index INTEGER,
+    location_text VARCHAR(255),
     metadata_json JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

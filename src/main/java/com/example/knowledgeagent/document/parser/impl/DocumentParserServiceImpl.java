@@ -13,6 +13,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 DocumentParserServiceImpl 组件，承载对应模块的业务职责。
+ */
 public class DocumentParserServiceImpl implements DocumentParserService {
     private final List<DocumentParser> parsers;
 

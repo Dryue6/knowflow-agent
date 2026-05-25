@@ -10,6 +10,9 @@ import com.example.knowledgeagent.rag.vo.RagStreamResult;
 import java.util.List;
 import java.util.function.Consumer;
 
+/**
+ * 定义 RagService 接口，约定该模块对外提供的能力。
+ */
 public interface RagService {
     /**
      * 执行向量检索并返回相似切片。

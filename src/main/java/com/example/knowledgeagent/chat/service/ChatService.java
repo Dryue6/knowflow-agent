@@ -8,6 +8,9 @@ import com.example.knowledgeagent.chat.vo.ChatSessionVO;
 import com.example.knowledgeagent.common.api.PageResult;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+/**
+ * 定义 ChatService 接口，约定该模块对外提供的能力。
+ */
 public interface ChatService {
     /**
      * 创建聊天会话。

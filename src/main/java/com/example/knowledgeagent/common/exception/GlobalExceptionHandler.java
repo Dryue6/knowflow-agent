@@ -15,6 +15,9 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestControllerAdvice
+/**
+ * 定义 GlobalExceptionHandler 组件，承载对应模块的业务职责。
+ */
 public class GlobalExceptionHandler {
 
     /**

@@ -12,6 +12,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 DbChatMemoryService 组件，承载对应模块的业务职责。
+ */
 public class DbChatMemoryService implements ChatMemoryService {
     private final ChatMessageMapper chatMessageMapper;
 

@@ -8,6 +8,9 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
+/**
+ * 定义 KnowledgeSearchTool 组件，承载对应模块的业务职责。
+ */
 public class KnowledgeSearchTool {
     private final RagService ragService;
 

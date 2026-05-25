@@ -2,6 +2,7 @@ package com.example.knowledgeagent.document.parser.impl;
 
 import com.example.knowledgeagent.common.api.ErrorCode;
 import com.example.knowledgeagent.common.exception.BusinessException;
+import com.example.knowledgeagent.common.util.TextSanitizer;
 import com.example.knowledgeagent.document.enums.FileType;
 import com.example.knowledgeagent.document.parser.DocumentParser;
 import com.example.knowledgeagent.document.parser.ParsedDocument;
@@ -15,6 +16,9 @@ import java.nio.file.Path;
 import java.util.Map;
 
 @Component
+/**
+ * 定义 DocxDocumentParser 组件，承载对应模块的业务职责。
+ */
 public class DocxDocumentParser implements DocumentParser {
     /**
      * 声明该解析器支持 DOCX 文件。
@@ -31,7 +35,7 @@ public class DocxDocumentParser implements DocumentParser {
     public ParsedDocument parse(Path path) {
         try (XWPFDocument document = new XWPFDocument(Files.newInputStream(path));
              XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
-            return new ParsedDocument(path.getFileName().toString(), extractor.getText(), Map.of("paragraphs", document.getParagraphs().size()));
+            return new ParsedDocument(path.getFileName().toString(), TextSanitizer.removeNullBytes(extractor.getText()), Map.of("paragraphs", document.getParagraphs().size()));
         } catch (IOException ex) {
             throw new BusinessException(ErrorCode.FILE_ERROR, "解析 docx 文件失败: " + ex.getMessage());
         }

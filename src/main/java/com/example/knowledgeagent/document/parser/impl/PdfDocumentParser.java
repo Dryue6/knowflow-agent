@@ -2,6 +2,7 @@ package com.example.knowledgeagent.document.parser.impl;
 
 import com.example.knowledgeagent.common.api.ErrorCode;
 import com.example.knowledgeagent.common.exception.BusinessException;
+import com.example.knowledgeagent.common.util.TextSanitizer;
 import com.example.knowledgeagent.document.enums.FileType;
 import com.example.knowledgeagent.document.parser.DocumentParser;
 import com.example.knowledgeagent.document.parser.ParsedDocument;
@@ -12,9 +13,14 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @Component
+/**
+ * 定义 PdfDocumentParser 组件，承载对应模块的业务职责。
+ */
 public class PdfDocumentParser implements DocumentParser {
     /**
      * 声明该解析器支持 PDF 文件。
@@ -30,8 +36,20 @@ public class PdfDocumentParser implements DocumentParser {
     @Override
     public ParsedDocument parse(Path path) {
         try (PDDocument document = Loader.loadPDF(path.toFile())) {
-            String text = new PDFTextStripper().getText(document);
-            return new ParsedDocument(path.getFileName().toString(), text, Map.of("pages", document.getNumberOfPages()));
+            PDFTextStripper stripper = new PDFTextStripper();
+            StringBuilder text = new StringBuilder();
+            List<Map<String, Object>> pageRanges = new ArrayList<>();
+            for (int page = 1; page <= document.getNumberOfPages(); page++) {
+                if (!text.isEmpty()) {
+                    text.append('\n');
+                }
+                int start = text.length();
+                stripper.setStartPage(page);
+                stripper.setEndPage(page);
+                text.append(TextSanitizer.removeNullBytes(stripper.getText(document)));
+                pageRanges.add(Map.of("pageNumber", page, "startOffset", start, "endOffset", text.length()));
+            }
+            return new ParsedDocument(path.getFileName().toString(), text.toString(), Map.of("pages", document.getNumberOfPages(), "pageRanges", pageRanges));
         } catch (IOException ex) {
             throw new BusinessException(ErrorCode.FILE_ERROR, "解析 pdf 文件失败: " + ex.getMessage());
         }

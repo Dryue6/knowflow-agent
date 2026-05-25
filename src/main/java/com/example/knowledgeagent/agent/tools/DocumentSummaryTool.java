@@ -7,6 +7,9 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
+/**
+ * 定义 DocumentSummaryTool 组件，承载对应模块的业务职责。
+ */
 public class DocumentSummaryTool {
     private final DocumentService documentService;
 

@@ -10,6 +10,9 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @MapperScan("com.example.knowledgeagent.**.mapper")
 @ConfigurationPropertiesScan
 @SpringBootApplication
+/**
+ * 定义 KnowledgeAgentApplication 组件，承载对应模块的业务职责。
+ */
 public class KnowledgeAgentApplication {
 
     /**

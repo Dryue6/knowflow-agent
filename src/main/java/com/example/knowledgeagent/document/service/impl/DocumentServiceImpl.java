@@ -2,18 +2,24 @@ package com.example.knowledgeagent.document.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.knowledgeagent.common.api.ErrorCode;
 import com.example.knowledgeagent.common.api.PageResult;
 import com.example.knowledgeagent.common.exception.BusinessException;
 import com.example.knowledgeagent.document.dto.DocumentUploadResponse;
+import com.example.knowledgeagent.document.dto.UpdateDocumentConstraintRequest;
 import com.example.knowledgeagent.document.entity.Document;
 import com.example.knowledgeagent.document.entity.DocumentChunk;
+import com.example.knowledgeagent.document.enums.DocumentConstraintLevel;
 import com.example.knowledgeagent.document.enums.DocumentStatus;
 import com.example.knowledgeagent.document.enums.FileType;
 import com.example.knowledgeagent.document.mapper.DocumentChunkMapper;
 import com.example.knowledgeagent.document.mapper.DocumentMapper;
+import com.example.knowledgeagent.document.parser.DocumentParserService;
 import com.example.knowledgeagent.document.service.DocumentService;
 import com.example.knowledgeagent.document.service.VectorStoreService;
 import com.example.knowledgeagent.document.vo.DocumentChunkVO;
+import com.example.knowledgeagent.document.vo.DocumentFileResource;
+import com.example.knowledgeagent.document.vo.DocumentPreviewTextVO;
 import com.example.knowledgeagent.document.vo.DocumentVO;
 import com.example.knowledgeagent.job.DocumentIndexJobService;
 import com.example.knowledgeagent.job.enums.IndexJobType;
@@ -22,6 +28,8 @@ import com.example.knowledgeagent.knowledge.service.KnowledgeBaseService;
 import com.example.knowledgeagent.storage.FileStorageService;
 import com.example.knowledgeagent.storage.StoredFile;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.PathResource;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -29,10 +37,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 定义 DocumentServiceImpl 组件，承载对应模块的业务职责。
+ */
 public class DocumentServiceImpl implements DocumentService {
     private final DocumentMapper documentMapper;
     private final DocumentChunkMapper documentChunkMapper;
@@ -41,6 +56,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final FileStorageService fileStorageService;
     private final VectorStoreService vectorStoreService;
     private final DocumentIndexJobService documentIndexJobService;
+    private final DocumentParserService documentParserService;
 
     /**
      * 上传文档并创建异步索引任务。
@@ -69,6 +85,8 @@ public class DocumentServiceImpl implements DocumentService {
         document.setTitle(storedFile.originalFileName());
         document.setStatus(DocumentStatus.UPLOADED);
         document.setChunkCount(0);
+        document.setConstraintLevel(DocumentConstraintLevel.NORMAL);
+        document.setConstraintPriority(100);
         LocalDateTime now = LocalDateTime.now();
         document.setCreatedAt(now);
         document.setUpdatedAt(now);
@@ -145,6 +163,45 @@ public class DocumentServiceImpl implements DocumentService {
         return PageResult.of(result.getRecords().stream().map(DocumentChunkVO::from).toList(), result.getTotal(), page, size);
     }
 
+    @Override
+    /**
+     * 获取文档原始文件资源，供在线预览和下载接口复用。
+     */
+    public DocumentFileResource getDocumentFile(Long documentId) {
+        Document document = mustGet(documentId);
+        Path path = existingFile(document);
+        return new DocumentFileResource(new PathResource(path), document.getOriginalFileName(), mediaType(document, path), fileSize(path));
+    }
+
+    @Override
+    /**
+     * 获取可直接文本预览的文档内容，PDF 继续走原文件预览以保留版式。
+     */
+    public DocumentPreviewTextVO previewText(Long documentId) {
+        Document document = mustGet(documentId);
+        Path path = existingFile(document);
+        String content = switch (document.getFileType()) {
+            case TXT, MD -> readUtf8(path);
+            case DOCX -> documentParserService.parse(path.toString(), document.getFileType()).text();
+            case PDF -> throw BusinessException.badRequest("PDF 文档请使用原文件预览");
+        };
+        return new DocumentPreviewTextVO(document.getId(), document.getOriginalFileName(), document.getFileType(), content, "TEXT");
+    }
+
+    @Override
+    @Transactional
+    /**
+     * 更新文档约束等级和优先级，影响后续 RAG 上下文注入顺序。
+     */
+    public DocumentVO updateConstraint(Long documentId, UpdateDocumentConstraintRequest request) {
+        Document document = mustGet(documentId);
+        document.setConstraintLevel(request.constraintLevel());
+        document.setConstraintPriority(request.constraintPriority() == null ? 100 : request.constraintPriority());
+        document.setUpdatedAt(LocalDateTime.now());
+        documentMapper.updateById(document);
+        return DocumentVO.from(document);
+    }
+
     /**
      * 在事务提交后启动异步索引任务。
      * <p>
@@ -159,6 +216,9 @@ public class DocumentServiceImpl implements DocumentService {
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
+            /**
+             * 事务提交后触发异步索引，避免索引线程读取到未提交数据。
+             */
             public void afterCommit() {
                 documentIndexJobService.indexDocumentAsync(jobId, documentId);
             }
@@ -174,6 +234,58 @@ public class DocumentServiceImpl implements DocumentService {
             throw BusinessException.notFound("文档不存在");
         }
         return document;
+    }
+
+    /**
+     * 校验本地文件仍然存在，并返回规范化后的绝对路径。
+     */
+    private Path existingFile(Document document) {
+        Path path = Path.of(document.getFilePath()).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(path)) {
+            throw new BusinessException(ErrorCode.FILE_ERROR, "文件不存在或已被移除");
+        }
+        return path;
+    }
+
+    /**
+     * 读取文件大小，读取失败时转换为统一业务异常。
+     */
+    private long fileSize(Path path) {
+        try {
+            return Files.size(path);
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_ERROR, "读取文件大小失败: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * 处理 readUtf8 方法对应的业务逻辑。
+     */
+    private String readUtf8(Path path) {
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_ERROR, "读取文件内容失败: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * 推断文件响应类型，优先使用系统探测结果，失败时按业务文件类型兜底。
+     */
+    private MediaType mediaType(Document document, Path path) {
+        try {
+            String contentType = Files.probeContentType(path);
+            if (StringUtils.hasText(contentType)) {
+                return MediaType.parseMediaType(contentType);
+            }
+        } catch (Exception ignored) {
+        }
+        return switch (document.getFileType()) {
+            case PDF -> MediaType.APPLICATION_PDF;
+            case TXT -> MediaType.TEXT_PLAIN;
+            case MD -> MediaType.valueOf("text/markdown");
+            case DOCX -> MediaType.valueOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        };
     }
 }
 

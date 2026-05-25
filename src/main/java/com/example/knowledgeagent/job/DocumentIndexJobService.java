@@ -3,6 +3,9 @@ package com.example.knowledgeagent.job;
 import com.example.knowledgeagent.job.enums.IndexJobType;
 import com.example.knowledgeagent.job.vo.IndexJobVO;
 
+/**
+ * 定义 DocumentIndexJobService 接口，约定该模块对外提供的能力。
+ */
 public interface DocumentIndexJobService {
     /**
      * 创建文档索引任务记录。

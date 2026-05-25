@@ -1,11 +1,10 @@
 package com.example.knowledgeagent.document.embedding;
 
-import com.example.knowledgeagent.common.api.ErrorCode;
-import com.example.knowledgeagent.common.exception.BusinessException;
 import com.example.knowledgeagent.config.AiModelProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -21,7 +20,11 @@ import java.util.Map;
 import java.util.Random;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
+/**
+ * 定义 OpenAiEmbeddingService 组件，承载对应模块的业务职责。
+ */
 public class OpenAiEmbeddingService implements EmbeddingService {
     private final AiModelProperties properties;
     private final ObjectMapper objectMapper;
@@ -43,7 +46,7 @@ public class OpenAiEmbeddingService implements EmbeddingService {
     @Override
     public List<List<Double>> embedTexts(List<String> texts) {
         if (!StringUtils.hasText(properties.embedding().apiKey())) {
-            return texts.stream().map(this::localEmbedding).toList();
+            return localEmbeddings(texts);
         }
         try {
             // OpenAI-compatible embedding 接口统一使用 /embeddings，供应商通过配置切换。
@@ -60,7 +63,8 @@ public class OpenAiEmbeddingService implements EmbeddingService {
                     .build();
             HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() >= 300) {
-                throw new BusinessException(ErrorCode.AI_ERROR, "Embedding API 调用失败: " + response.body());
+                log.warn("Embedding API returned status {}, fallback to local deterministic embeddings: {}", response.statusCode(), response.body());
+                return localEmbeddings(texts);
             }
             JsonNode data = objectMapper.readTree(response.body()).path("data");
             List<List<Double>> result = new ArrayList<>();
@@ -70,11 +74,17 @@ public class OpenAiEmbeddingService implements EmbeddingService {
                 result.add(vector);
             }
             return result;
-        } catch (BusinessException ex) {
-            throw ex;
         } catch (Exception ex) {
-            throw new BusinessException(ErrorCode.AI_ERROR, "Embedding API 调用失败: " + ex.getMessage());
+            log.warn("Embedding API call failed, fallback to local deterministic embeddings", ex);
+            return localEmbeddings(texts);
         }
+    }
+
+    /**
+     * 处理 localEmbeddings 方法对应的业务逻辑。
+     */
+    private List<List<Double>> localEmbeddings(List<String> texts) {
+        return texts.stream().map(this::localEmbedding).toList();
     }
 
     /**

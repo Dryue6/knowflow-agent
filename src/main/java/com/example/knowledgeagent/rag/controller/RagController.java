@@ -18,6 +18,9 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/rag")
+/**
+ * 定义 RagController 组件，承载对应模块的业务职责。
+ */
 public class RagController {
     private final RagService ragService;
 
@@ -35,5 +38,6 @@ public class RagController {
     @PostMapping("/ask")
     public ApiResult<RagAnswerVO> ask(@Valid @RequestBody RagAskRequest request) {
         return ApiResult.ok(ragService.ask(request, List.of()));
+
     }
 }

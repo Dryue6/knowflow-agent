@@ -6,6 +6,9 @@ import com.example.knowledgeagent.job.enums.IndexJobType;
 
 import java.time.LocalDateTime;
 
+/**
+ * 定义 IndexJobVO 数据结构，用于在层间传递结构化数据。
+ */
 public record IndexJobVO(
         Long id,
         Long documentId,
