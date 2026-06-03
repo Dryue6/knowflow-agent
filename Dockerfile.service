@@ -1,0 +1,16 @@
+# syntax=docker/dockerfile:1.7
+ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-17
+ARG RUNTIME_IMAGE=eclipse-temurin:17-jre
+
+FROM ${MAVEN_IMAGE} AS build
+WORKDIR /workspace
+COPY . .
+ARG MODULE
+RUN --mount=type=cache,target=/root/.m2 mvn -q -pl ${MODULE} -am -DskipTests package
+
+FROM ${RUNTIME_IMAGE}
+WORKDIR /app
+ARG MODULE
+ENV TZ=Asia/Shanghai
+COPY --from=build /workspace/${MODULE}/target/*.jar /app/app.jar
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

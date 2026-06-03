@@ -1,0 +1,24 @@
+package com.example.knowledgeagent.auth.entity;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+@Data
+@TableName("user_account")
+/**
+ * 定义 UserAccount 组件，承载对应模块的业务职责。
+ */
+public class UserAccount {
+    @TableId(type = IdType.AUTO)
+    private Long id;
+    private String username;
+    private String passwordHash;
+    private String displayName;
+    private String status;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}

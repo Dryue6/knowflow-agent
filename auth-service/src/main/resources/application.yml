@@ -1,0 +1,68 @@
+server:
+  port: 18081
+
+spring:
+  application:
+    name: auth-service
+  profiles:
+    active: dev
+  config:
+    import: optional:nacos:${spring.application.name}-${spring.profiles.active}.yml
+  cloud:
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      discovery:
+        namespace: ${NACOS_NAMESPACE:public}
+      config:
+        namespace: ${NACOS_NAMESPACE:public}
+        group: DEFAULT_GROUP
+        file-extension: yml
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}
+      datasource:
+        flow-rules:
+          nacos:
+            server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+            data-id: auth-service-sentinel-flow-rules
+            group-id: SENTINEL_GROUP
+            rule-type: flow
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/knowledge_agent?currentSchema=auth
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+
+seata:
+  enabled: true
+  application-id: ${spring.application.name}
+  tx-service-group: knowflow_tx_group
+  service:
+    vgroup-mapping:
+      knowflow_tx_group: default
+  registry:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      group: SEATA_GROUP
+      application: seata-server
+  config:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      group: SEATA_GROUP
+
+feign:
+  sentinel:
+    enabled: true
+  client:
+    config:
+      default:
+        connectTimeout: 3000
+        readTimeout: 10000
+        loggerLevel: basic

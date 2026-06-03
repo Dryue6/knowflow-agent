@@ -1,0 +1,51 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: knowflow-gateway
+  profiles:
+    active: dev
+  config:
+    import: optional:nacos:${spring.application.name}-${spring.profiles.active}.yml
+  cloud:
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      discovery:
+        namespace: ${NACOS_NAMESPACE:public}
+      config:
+        namespace: ${NACOS_NAMESPACE:public}
+        group: DEFAULT_GROUP
+        file-extension: yml
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/auth/**
+        - id: document-service
+          uri: lb://document-service
+          predicates:
+            - Path=/api/documents/**,/api/index-jobs/**,/api/knowledge-bases/*/documents,/api/knowledge-bases/*/documents/**
+        - id: knowledge-service
+          uri: lb://knowledge-service
+          predicates:
+            - Path=/api/knowledge-bases/**
+        - id: rag-service
+          uri: lb://rag-service
+          predicates:
+            - Path=/api/rag/**
+        - id: chat-service
+          uri: lb://chat-service
+          predicates:
+            - Path=/api/chat/**
+        - id: agent-service
+          uri: lb://agent-service
+          predicates:
+            - Path=/api/agent/**

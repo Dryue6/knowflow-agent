@@ -43,6 +43,10 @@ replay_pid*
 *.dump
 *.dumpstream
 
+# Python 缓存
+__pycache__/
+*.pyc
+
 # 本地临时目录和工具缓存，仅用于开发机运行或排障过程。
 tmp/
 temp/

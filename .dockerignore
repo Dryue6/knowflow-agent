@@ -1,0 +1,11 @@
+.git
+.idea
+.vscode
+**/target
+**/.mvn/timing.properties
+logs
+data
+uploads
+*.log
+*.iml
+README.local.md

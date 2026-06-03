@@ -1,0 +1,165 @@
+﻿server:
+  port: 18083
+
+spring:
+  application:
+    name: document-service
+  profiles:
+    active: dev
+  config:
+    import: optional:nacos:${spring.application.name}-${spring.profiles.active}.yml
+  cloud:
+    gateway:
+      httpserver:
+        wiretap: true
+      httpclient:
+        wiretap: true
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      discovery:
+        namespace: ${NACOS_NAMESPACE:public}
+      config:
+        namespace: ${NACOS_NAMESPACE:public}
+        group: DEFAULT_GROUP
+        file-extension: yml
+
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}
+      datasource:
+        flow-rules:
+          nacos:
+            server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+            data-id: document-service-sentinel-flow-rules
+            group-id: SENTINEL_GROUP
+            rule-type: flow
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/knowledge_agent?currentSchema=document
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+
+seata:
+  enabled: true
+  application-id: ${spring.application.name}
+  tx-service-group: knowflow_tx_group
+  service:
+    vgroup-mapping:
+      knowflow_tx_group: default
+  registry:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      group: SEATA_GROUP
+      application: seata-server
+  config:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      group: SEATA_GROUP
+
+feign:
+  sentinel:
+    enabled: true
+  client:
+    config:
+      default:
+        connectTimeout: 3000
+        readTimeout: 10000
+        loggerLevel: basic
+
+ai:
+  chat:
+    base-url: ${AI_CHAT_BASE_URL:https://api.deepseek.com}
+    api-key: ${AI_CHAT_API_KEY:}
+    model-name: ${AI_CHAT_MODEL_NAME:deepseek-v4-flash}
+    temperature: ${AI_CHAT_TEMPERATURE:0.2}
+    timeout-seconds: ${AI_CHAT_TIMEOUT_SECONDS:60}
+  embedding:
+    base-url: ${AI_EMBEDDING_BASE_URL:http://localhost:11434}
+    api-key: ${AI_EMBEDDING_API_KEY:}
+    model-name: ${AI_EMBEDDING_MODEL_NAME:qwen3-embedding:0.6b}
+    dimension: ${AI_EMBEDDING_DIMENSION:1024}
+    timeout-seconds: ${AI_EMBEDDING_TIMEOUT_SECONDS:60}
+
+rag:
+  chunk-size: ${RAG_CHUNK_SIZE:1800}
+  chunk-overlap: ${RAG_CHUNK_OVERLAP:300}
+  top-k: ${RAG_TOP_K:5}
+  min-score: ${RAG_MIN_SCORE:0.8}
+  max-context-chunks: ${RAG_MAX_CONTEXT_CHUNKS:6}
+  max-history-messages: ${RAG_MAX_HISTORY_MESSAGES:8}
+  system-constraint-max-chunks: ${RAG_SYSTEM_CONSTRAINT_MAX_CHUNKS:12}
+  pinned-max-chunks: ${RAG_PINNED_MAX_CHUNKS:8}
+  candidate-top-k: ${RAG_CANDIDATE_TOP_K:30}
+  keyword-min-score: ${RAG_KEYWORD_MIN_SCORE:0.2}
+  final-min-score: ${RAG_FINAL_MIN_SCORE:0.6}
+  query-rewrite:
+    enabled: ${RAG_QUERY_REWRITE_ENABLED:true}
+    provider: ${RAG_QUERY_REWRITE_PROVIDER:ollama}
+    base-url: ${RAG_QUERY_REWRITE_BASE_URL:http://localhost:11434}
+    model-name: ${RAG_QUERY_REWRITE_MODEL_NAME:qwen2.5:7b}
+    temperature: ${RAG_QUERY_REWRITE_TEMPERATURE:0.0}
+    timeout-seconds: ${RAG_QUERY_REWRITE_TIMEOUT_SECONDS:90}
+    max-query-variants: ${RAG_QUERY_REWRITE_MAX_QUERY_VARIANTS:5}
+    max-terms-per-field: ${RAG_QUERY_REWRITE_MAX_TERMS_PER_FIELD:8}
+    num-predict: ${RAG_QUERY_REWRITE_NUM_PREDICT:96}
+    num-ctx: ${RAG_QUERY_REWRITE_NUM_CTX:2048}
+    max-retries: ${RAG_QUERY_REWRITE_MAX_RETRIES:0}
+    cache-enabled: ${RAG_QUERY_REWRITE_CACHE_ENABLED:true}
+    cache-ttl-minutes: ${RAG_QUERY_REWRITE_CACHE_TTL_MINUTES:60}
+    cache-max-size: ${RAG_QUERY_REWRITE_CACHE_MAX_SIZE:512}
+    cache-key-prefix: ${RAG_QUERY_REWRITE_CACHE_KEY_PREFIX:knowflow:rag:query-rewrite:}
+    fast-path-enabled: ${RAG_QUERY_REWRITE_FAST_PATH_ENABLED:true}
+    fast-path-max-length: ${RAG_QUERY_REWRITE_FAST_PATH_MAX_LENGTH:12}
+    complex-intent-keywords: ${RAG_QUERY_REWRITE_COMPLEX_INTENT_KEYWORDS:怎么,如何,为什么,规则,计算,占比,分配,要求,流程}
+    warmup-enabled: ${RAG_QUERY_REWRITE_WARMUP_ENABLED:true}
+    warmup-query: ${RAG_QUERY_REWRITE_WARMUP_QUERY:成绩怎么计算}
+    fallback-mode: ${RAG_QUERY_REWRITE_FALLBACK_MODE:conservative}
+  rerank:
+    enabled: ${RAG_RERANK_ENABLED:true}
+    mode: ${RAG_RERANK_MODE:local}
+    provider: ${RAG_RERANK_PROVIDER:}
+    base-url: ${RAG_RERANK_BASE_URL:}
+    api-key: ${RAG_RERANK_API_KEY:}
+    model-name: ${RAG_RERANK_MODEL_NAME:}
+
+storage:
+  local:
+    base-path: ${STORAGE_LOCAL_BASE_PATH:/app/data/uploads}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    public-endpoint: ${MINIO_PUBLIC_ENDPOINT:${MINIO_ENDPOINT:http://localhost:9000}}
+    access-key: ${MINIO_ACCESS_KEY:knowflow}
+    secret-key: ${MINIO_SECRET_KEY:knowflow123}
+    bucket: ${MINIO_BUCKET:knowflow-documents}
+    secure: ${MINIO_SECURE:false}
+
+vector:
+  type: ${VECTOR_STORE_TYPE:pgvector}
+
+document:
+  index:
+    embedding-batch-size: ${DOCUMENT_INDEX_EMBEDDING_BATCH_SIZE:8}
+    executor:
+      core-size: ${DOCUMENT_INDEX_EXECUTOR_CORE_SIZE:1}
+      max-size: ${DOCUMENT_INDEX_EXECUTOR_MAX_SIZE:1}
+      queue-capacity: ${DOCUMENT_INDEX_EXECUTOR_QUEUE_CAPACITY:100}
+
+ocr:
+  enabled: ${OCR_ENABLED:false}
+  base-url: ${OCR_BASE_URL:http://ocr-service:8000}
+  timeout-seconds: ${OCR_TIMEOUT_SECONDS:30}
+  min-confidence: ${OCR_MIN_CONFIDENCE:0.5}
+  pdf-min-text-length: ${OCR_PDF_MIN_TEXT_LENGTH:20}
+  pdf-dpi: ${OCR_PDF_DPI:200}
+  docx:
+    enabled: ${OCR_DOCX_ENABLED:true}
+    max-images: ${OCR_DOCX_MAX_IMAGES:30}
+    min-bytes: ${OCR_DOCX_MIN_BYTES:512}
+    max-pixels: ${OCR_DOCX_MAX_PIXELS:12000000}

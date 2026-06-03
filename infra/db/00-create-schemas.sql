@@ -1,0 +1,8 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS knowledge;
+CREATE SCHEMA IF NOT EXISTS document;
+CREATE SCHEMA IF NOT EXISTS chat;
+
+-- 练习阶段保留 public schema，方便旧单体和新微服务并行验证。

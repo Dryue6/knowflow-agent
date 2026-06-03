@@ -1,0 +1,127 @@
+server:
+  port: 18085
+
+chat:
+  rag-stream-base-url: ${RAG_STREAM_BASE_URL:http://rag-service:18084}
+
+spring:
+  application:
+    name: chat-service
+  profiles:
+    active: dev
+  config:
+    import: optional:nacos:${spring.application.name}-${spring.profiles.active}.yml
+
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 3000
+            readTimeout: ${FEIGN_READ_TIMEOUT:120000}
+          ragClient:
+            connectTimeout: 3000
+            readTimeout: ${FEIGN_READ_TIMEOUT:120000}
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      discovery:
+        namespace: ${NACOS_NAMESPACE:public}
+      config:
+        namespace: ${NACOS_NAMESPACE:public}
+        group: DEFAULT_GROUP
+        file-extension: yml
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}
+      datasource:
+        flow-rules:
+          nacos:
+            server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+            data-id: chat-service-sentinel-flow-rules
+            group-id: SENTINEL_GROUP
+            rule-type: flow
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/knowledge_agent?currentSchema=chat
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+
+seata:
+  enabled: true
+  application-id: ${spring.application.name}
+  tx-service-group: knowflow_tx_group
+  service:
+    vgroup-mapping:
+      knowflow_tx_group: default
+  registry:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      group: SEATA_GROUP
+      application: seata-server
+  config:
+    type: nacos
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      group: SEATA_GROUP
+
+feign:
+  sentinel:
+    enabled: true
+  client:
+    config:
+      default:
+        connectTimeout: 3000
+        readTimeout: ${FEIGN_READ_TIMEOUT:120000}
+        loggerLevel: basic
+      ragClient:
+        connectTimeout: 3000
+        readTimeout: ${FEIGN_READ_TIMEOUT:120000}
+        loggerLevel: basic
+
+rag:
+  chunk-size: ${RAG_CHUNK_SIZE:1800}
+  chunk-overlap: ${RAG_CHUNK_OVERLAP:300}
+  top-k: ${RAG_TOP_K:5}
+  min-score: ${RAG_MIN_SCORE:0.8}
+  max-context-chunks: ${RAG_MAX_CONTEXT_CHUNKS:6}
+  max-history-messages: ${RAG_MAX_HISTORY_MESSAGES:8}
+  system-constraint-max-chunks: ${RAG_SYSTEM_CONSTRAINT_MAX_CHUNKS:12}
+  pinned-max-chunks: ${RAG_PINNED_MAX_CHUNKS:8}
+  candidate-top-k: ${RAG_CANDIDATE_TOP_K:30}
+  keyword-min-score: ${RAG_KEYWORD_MIN_SCORE:0.2}
+  final-min-score: ${RAG_FINAL_MIN_SCORE:0.6}
+  query-rewrite:
+    enabled: ${RAG_QUERY_REWRITE_ENABLED:true}
+    provider: ${RAG_QUERY_REWRITE_PROVIDER:ollama}
+    base-url: ${RAG_QUERY_REWRITE_BASE_URL:http://localhost:11434}
+    model-name: ${RAG_QUERY_REWRITE_MODEL_NAME:qwen2.5:7b}
+    temperature: ${RAG_QUERY_REWRITE_TEMPERATURE:0.0}
+    timeout-seconds: ${RAG_QUERY_REWRITE_TIMEOUT_SECONDS:90}
+    max-query-variants: ${RAG_QUERY_REWRITE_MAX_QUERY_VARIANTS:5}
+    max-terms-per-field: ${RAG_QUERY_REWRITE_MAX_TERMS_PER_FIELD:8}
+    num-predict: ${RAG_QUERY_REWRITE_NUM_PREDICT:96}
+    num-ctx: ${RAG_QUERY_REWRITE_NUM_CTX:2048}
+    max-retries: ${RAG_QUERY_REWRITE_MAX_RETRIES:0}
+    cache-enabled: ${RAG_QUERY_REWRITE_CACHE_ENABLED:true}
+    cache-ttl-minutes: ${RAG_QUERY_REWRITE_CACHE_TTL_MINUTES:60}
+    cache-max-size: ${RAG_QUERY_REWRITE_CACHE_MAX_SIZE:512}
+    cache-key-prefix: ${RAG_QUERY_REWRITE_CACHE_KEY_PREFIX:knowflow:rag:query-rewrite:}
+    fast-path-enabled: ${RAG_QUERY_REWRITE_FAST_PATH_ENABLED:true}
+    fast-path-max-length: ${RAG_QUERY_REWRITE_FAST_PATH_MAX_LENGTH:12}
+    complex-intent-keywords: ${RAG_QUERY_REWRITE_COMPLEX_INTENT_KEYWORDS:怎么,如何,为什么,规则,计算,占比,分配,要求,流程}
+    warmup-enabled: ${RAG_QUERY_REWRITE_WARMUP_ENABLED:true}
+    warmup-query: ${RAG_QUERY_REWRITE_WARMUP_QUERY:成绩怎么计算}
+    fallback-mode: ${RAG_QUERY_REWRITE_FALLBACK_MODE:conservative}
+  rerank:
+    enabled: ${RAG_RERANK_ENABLED:true}
+    mode: ${RAG_RERANK_MODE:local}
+    provider: ${RAG_RERANK_PROVIDER:}
+    base-url: ${RAG_RERANK_BASE_URL:}
+    api-key: ${RAG_RERANK_API_KEY:}
+    model-name: ${RAG_RERANK_MODEL_NAME:}
