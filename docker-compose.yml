@@ -14,11 +14,13 @@ x-service-env: &service-env
   AI_CHAT_MODEL_NAME: ${AI_CHAT_MODEL_NAME:-deepseek-v4-flash}
   AI_CHAT_TEMPERATURE: ${AI_CHAT_TEMPERATURE:-0.2}
   AI_CHAT_TIMEOUT_SECONDS: ${AI_CHAT_TIMEOUT_SECONDS:-60}
-  AI_EMBEDDING_BASE_URL: ${AI_EMBEDDING_BASE_URL:-http://ollama:11434}
+  AI_EMBEDDING_BASE_URL: ${AI_EMBEDDING_BASE_URL:-http://ollama-embedding:11434}
   AI_EMBEDDING_API_KEY: ${AI_EMBEDDING_API_KEY:-}
-  AI_EMBEDDING_MODEL_NAME: ${AI_EMBEDDING_MODEL_NAME:-qwen2.5:7b}
-  AI_EMBEDDING_DIMENSION: ${AI_EMBEDDING_DIMENSION:-1536}
+  AI_EMBEDDING_MODEL_NAME: ${AI_EMBEDDING_MODEL_NAME:-qwen3-embedding:0.6b}
+  AI_EMBEDDING_DIMENSION: ${AI_EMBEDDING_DIMENSION:-1024}
   AI_EMBEDDING_TIMEOUT_SECONDS: ${AI_EMBEDDING_TIMEOUT_SECONDS:-60}
+  RAG_QUERY_REWRITE_BASE_URL: ${RAG_QUERY_REWRITE_BASE_URL:-http://ollama-rewrite:11434}
+  RAG_QUERY_REWRITE_MODEL_NAME: ${RAG_QUERY_REWRITE_MODEL_NAME:-qwen2.5:7b}
   STORAGE_LOCAL_BASE_PATH: ${STORAGE_LOCAL_BASE_PATH:-/app/data/uploads}
   VECTOR_STORE_TYPE: ${VECTOR_STORE_TYPE:-pgvector}
   TZ: Asia/Shanghai
@@ -86,6 +88,38 @@ services:
       timeout: 5s
       retries: 10
 
+  minio:
+    image: minio/minio:latest
+    container_name: knowflow-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-knowflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-knowflow123}
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_CORS_ALLOWED_ORIGIN:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173}
+      TZ: Asia/Shanghai
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./data/uploads:/data
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: knowflow-minio-init
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-knowflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-knowflow123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-knowflow-documents}
+      MINIO_CORS_ALLOWED_ORIGIN: ${MINIO_CORS_ALLOWED_ORIGIN:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173}
+      TZ: Asia/Shanghai
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 2; done; mc mb --ignore-existing local/"$$MINIO_BUCKET";'
+
   nacos:
     image: nacos/nacos-server:v2.3.2
     container_name: knowflow-nacos
@@ -138,16 +172,39 @@ services:
       retries: 30
       start_period: 30s
 
-  ollama:
+  ollama-embedding:
     image: ollama/ollama:latest
-    container_name: knowflow-ollama
+    container_name: knowflow-ollama-embedding
+    restart: unless-stopped
+    gpus: all
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_MODELS: /models
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_EMBEDDING_NUM_PARALLEL:-1}
+      TZ: Asia/Shanghai
+    ports:
+      - "11434:11434"
+    volumes:
+      - D:/llm:/models
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  ollama-rewrite:
+    image: ollama/ollama:latest
+    container_name: knowflow-ollama-rewrite
     restart: unless-stopped
     environment:
       OLLAMA_KEEP_ALIVE: 30m
       OLLAMA_MODELS: /models
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_REWRITE_NUM_PARALLEL:-1}
       TZ: Asia/Shanghai
     ports:
-      - "11434:11434"
+      - "11435:11434"
     volumes:
       - D:/llm:/models
     healthcheck:
@@ -162,14 +219,30 @@ services:
     profiles:
       - tools
     depends_on:
-      ollama:
+      ollama-embedding:
+        condition: service_started
+      ollama-rewrite:
         condition: service_started
     environment:
       OLLAMA_KEEP_ALIVE: 30m
       OLLAMA_MODELS: /models
-      OLLAMA_HOST: http://ollama:11434
       TZ: Asia/Shanghai
-    entrypoint: ["/bin/sh", "-c", "ollama pull qwen2.5:7b"]
+    entrypoint: ["/bin/sh", "-c", "OLLAMA_HOST=http://ollama-embedding:11434 ollama pull qwen3-embedding:0.6b && OLLAMA_HOST=http://ollama-rewrite:11434 ollama pull qwen2.5:7b"]
+
+  ocr-service:
+    build:
+      context: ./infra/ocr-service
+    container_name: knowflow-ocr
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=10).read()\""]
+      interval: 15s
+      timeout: 12s
+      retries: 20
 
   knowflow-gateway:
     build:
@@ -227,14 +300,37 @@ services:
         MODULE: document-service
     container_name: knowflow-document
     restart: unless-stopped
-    depends_on: *service-depends
+    depends_on:
+      <<: *service-depends
+      minio-init:
+        condition: service_completed_successfully
+      ocr-service:
+        condition: service_healthy
+      ollama-embedding:
+        condition: service_started
+      ollama-rewrite:
+        condition: service_started
     environment:
       <<: *service-env
-      RAG_QUERY_REWRITE_BASE_URL: http://ollama:11434
+      DOCUMENT_INDEX_EMBEDDING_BATCH_SIZE: ${DOCUMENT_INDEX_EMBEDDING_BATCH_SIZE:-8}
+      DOCUMENT_INDEX_EXECUTOR_CORE_SIZE: ${DOCUMENT_INDEX_EXECUTOR_CORE_SIZE:-1}
+      DOCUMENT_INDEX_EXECUTOR_MAX_SIZE: ${DOCUMENT_INDEX_EXECUTOR_MAX_SIZE:-1}
+      OCR_ENABLED: ${OCR_ENABLED:-true}
+      OCR_BASE_URL: ${OCR_BASE_URL:-http://ocr-service:8000}
+      OCR_TIMEOUT_SECONDS: ${OCR_TIMEOUT_SECONDS:-30}
+      OCR_MIN_CONFIDENCE: ${OCR_MIN_CONFIDENCE:-0.5}
+      OCR_DOCX_ENABLED: ${OCR_DOCX_ENABLED:-true}
+      OCR_DOCX_MAX_IMAGES: ${OCR_DOCX_MAX_IMAGES:-30}
+      OCR_DOCX_MIN_BYTES: ${OCR_DOCX_MIN_BYTES:-512}
+      OCR_DOCX_MAX_PIXELS: ${OCR_DOCX_MAX_PIXELS:-12000000}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-knowflow}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-knowflow123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-knowflow-documents}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
     ports:
       - "18083:18083"
-    volumes:
-      - ./data/uploads:/app/data/uploads
 
   rag-service:
     build:
@@ -247,11 +343,12 @@ services:
     restart: unless-stopped
     depends_on:
       <<: *service-depends
-      ollama:
+      ollama-rewrite:
+        condition: service_started
+      ollama-embedding:
         condition: service_started
     environment:
       <<: *service-env
-      RAG_QUERY_REWRITE_BASE_URL: http://ollama:11434
       RAG_FEIGN_READ_TIMEOUT: ${RAG_FEIGN_READ_TIMEOUT:-60000}
     ports:
       - "18084:18084"
